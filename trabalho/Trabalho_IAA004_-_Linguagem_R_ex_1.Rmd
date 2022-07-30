@@ -1,0 +1,144 @@
+---
+---
+---
+
+# Trabalho IAA004 Linguagem R - Exercício 1
+
+## Instalação e importação das bibliotecas
+
+```{r, prompt=FALSE}
+install.packages("e1071")
+install.packages("kernlab")
+install.packages("mlbench")
+install.packages("caret")
+library("mlbench")
+library("caret")
+library("randomForest")
+
+
+```
+
+## Importação do data frame
+
+```{r, prompt=FALSE}
+data(Satellite)
+dt <- Satellite
+summary(dt)
+head(dt)
+```
+
+## Particionamento dos dados
+
+Os dados devem ser particionados em dois data frames, um para treino e outro para treinamento
+
+```{r, prompt=FALSE}
+
+indexes <- createDataPartition(dt$classes, p = 0.80, list = F)
+training <- dt[indexes, ]
+testing <- dt[-indexes, ]
+
+```
+
+## Análise da frequência dos dados de treino
+
+É interessante observar a frequência para saber se há uma boa amostra de resultados de amostra
+
+```{r, prompt=FALSE}
+freq <- table(testing$classes)
+out <- barplot(freq, xlab = "Soil Type", names.arg = "")
+text(out, rep(-.1, 6), names(freq), srt=45, pos=1, offset = "2", xpd=NA, cex=.75 )
+
+```
+
+## Treinamento e salvamento dos modelos
+
+```{r, prompt=FALSE}
+set.seed(7)
+rf <- train(classes ~ ., data = training, method = "rf")
+svm <- train(classes ~ ., data = training, method = "svmRadial")
+rna <- train(classes ~ ., data = training, method = "nnet")
+
+saveRDS(rf, "random_forest_testing_phase.rds")
+saveRDS(svm, "SVM_testing_phase.rds")
+saveRDS(rna, "nnet_testing_phase.rds")
+
+```
+
+### Criação de predições de testagem
+
+```{r, prompt=FALSE}
+predict.rf <- predict(rf, testing)
+predict.svm <- predict(svm, testing)
+predict.rna <- predict(rna, testing)
+```
+
+### Criação das matrizes de confusão
+
+Com as matrizes de confusão é possível averiguar qual modelo performou melhor na classificação dos dados utilizados
+
+```{r, prompt=FALSE}
+confusion_matrix_rf <- confusionMatrix(predict.rf, testing$classes)
+confusion_matrix_svm <- confusionMatrix(predict.svm, testing$classes)
+confusion_matrix_rna <- confusionMatrix(predict.rna, testing$classes)
+```
+
+### Seleção da melhor técnica para a aplicação atual
+
+```{r, prompt=FALSE}
+accuracy_df <- data.frame(
+    algorithm = c("rf", "svm", "rna"),
+    accuracy = c(
+        confusion_matrix_rf$overall["Accuracy"],
+        confusion_matrix_svm$overall["Accuracy"],
+        confusion_matrix_rna$overall["Accuracy"]
+    )
+)
+
+best_technique <- accuracy_df[accuracy_df$accuracy == max(accuracy_df$accuracy),]
+
+print(accuracy_df)
+print(best_technique)
+
+```
+
+#### Melhor técnica
+
+Observando as acurácias das matrizes de confusão para os modelos, a que melhor performou foi a Random Forest.
+
+##### Parametros de criação de modelo
+
+Para cada tipo de algoritmo/técnica existem parametros que são os principais ajustes para a criação de um modelo que mimetize o modelo treinado. No caso da random Forest temos o ntree (número de árvores para crescimento) e o mtry (Número de variáveis amostradas aleatoriamente como candidatas em cada divisão)
+
+```{r, prompt=FALSE}
+print(rf$finalModel[c("ntree", "mtry")])
+
+```
+
+## Criação do modelo final
+
+Utilizamos todo o data-frame de amostra para a criação do modelo final
+
+```{r, prompt=FALSE}
+final_model = randomForest(formula = classes ~ ., data = dt, ntree = rf$finalModel$ntree, mtry = rf$finalModel$mtry, keep.forest = T)
+
+saveRDS(final_model, "final_model_rf.rds")
+```
+
+### Predições cheias
+
+As predições são geradas colocando em confronto o modelo e a amostra de teste
+
+```{r, prompt=FALSE}
+final_predictions <- predict(final_model, testing)
+```
+
+### Matriz de Confusão final
+
+A matriz de confusão final é gerada colocando em confronto as predições geradas pelo modelo a amostra de testagem
+
+```{r, prompt=FALSE}
+confusion_matrix_full_model = confusionMatrix(final_predictions, testing$classes)
+
+print(confusion_matrix_full_model$overall["Accuracy"])
+
+```
